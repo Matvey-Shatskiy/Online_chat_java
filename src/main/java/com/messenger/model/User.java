@@ -1,14 +1,20 @@
 package com.messenger.model;
 
-import jakarta.persistence.*;
-import lombok.Data;
-import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "users")
+@Getter
+@Setter
+@NoArgsConstructor
 public class User {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String uuid;
@@ -24,7 +30,14 @@ public class User {
     private String passwordHash;
 
     private String userImage;
+
+    @Column(columnDefinition = "TEXT")
     private String bio;
+
+    // Поля для отслеживания статуса и времени визита
+    private boolean isOnline = false;
+
     private LocalDateTime lastSeenAt;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 }

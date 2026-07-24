@@ -1,55 +1,31 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
-    <title>Registration</title>
-
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация — Messenger</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
-
 <body>
-
-
-<div class="container">
-
+<div class="auth-container">
     <h1>Messenger</h1>
-
     <h2>Регистрация</h2>
-
-
-    <input id="username"
-           type="text"
-           placeholder="Username">
-
-
-    <input id="email"
-           type="email"
-           placeholder="Email">
-
-
-    <input id="password"
-           type="password"
-           placeholder="Password">
-
-
-    <button onclick="register()">
-        Зарегистрироваться
-    </button>
-
-
-    <p>
-        Уже есть аккаунт?
-        <a href="login.html">
-            Войти
-        </a>
-    </p>
-
-
+    <form id="register-form">
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="text" id="username" placeholder="Имя пользователя" required>
+        <input type="password" id="password" placeholder="Пароль (мин. 6 символов)" required minlength="6">
+        <input type="password" id="confirm" placeholder="Подтвердите пароль" required>
+        <div id="error" class="error"></div>
+        <div id="success" class="success"></div>
+        <button type="submit">Зарегистрироваться</button>
+    </form>
+    <div class="footer">
+        Уже есть аккаунт? <a href="/login.html">Войти</a>
+    </div>
 </div>
-
-
-<script src="js/register.js"></script>
-
+<script type="module">
+    import { initRegister } from '/js/auth.js';
+    initRegister();
+</script>
 </body>
 </html>

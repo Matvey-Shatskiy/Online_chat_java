@@ -10,6 +10,7 @@ target/
 .idea/compiler.xml
 .idea/libraries/
 .idea
+
 *.iws
 *.iml
 *.ipr
@@ -22,6 +23,7 @@ target/
 .settings
 .springBeans
 .sts4-cache
+users.db
 
 ### NetBeans ###
 /nbproject/private/
@@ -38,3 +40,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+uploads/
+/uploads/

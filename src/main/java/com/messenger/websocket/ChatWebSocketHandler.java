@@ -28,23 +28,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        String query = session.getUri().getQuery();
-        String userUuid = null;
-        if (query != null) {
-            for (String param : query.split("&")) {
-                String[] pair = param.split("=");
-                if (pair.length == 2 && pair[0].equals("user_uuid")) {
-                    userUuid = pair[1];
-                    break;
-                }
-            }
-        }
+        String userUuid = getUserUuidFromSession(session);
         if (userUuid != null && !userUuid.isEmpty()) {
             activeConnections.put(userUuid, session);
-            userRepository.findById(userUuid).ifPresent(user -> {
-                user.setLastSeenAt(LocalDateTime.now());
-                userRepository.save(user);
-            });
+
+            // Обновляем статус на "В сети"
+            updateUserStatus(userUuid, true);
+
+            // Уведомляем остальных
+            broadcastStatusUpdate(userUuid, true);
+
             System.out.println("Новое подключение: " + userUuid + ". Всего: " + activeConnections.size());
         } else {
             session.close(CloseStatus.BAD_DATA);
@@ -75,6 +68,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         messageRepository.save(msg);
 
         Map<String, Object> response = new ConcurrentHashMap<>();
+        response.put("type", "CHAT_MESSAGE");
         response.put("senderUuid", sender.getUuid());
         response.put("senderUsername", sender.getUsername());
         response.put("receiverUuid", receiver.getUuid());
@@ -89,16 +83,64 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (receiverSession != null && receiverSession.isOpen()) {
             receiverSession.sendMessage(new TextMessage(responseJson));
         }
-        if (senderSession != null && senderSession.isOpen()) {
+        if (senderSession != null && senderSession.isOpen() && !senderUuid.equals(receiverUuid)) {
             senderSession.sendMessage(new TextMessage(responseJson));
         }
-
-        System.out.println("Сообщение от " + sender.getUsername() + " к " + receiver.getUsername());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        activeConnections.entrySet().removeIf(entry -> entry.getValue().equals(session));
-        System.out.println("Отключился. Осталось: " + activeConnections.size());
+        String userUuid = getUserUuidFromSession(session);
+        if (userUuid != null) {
+            activeConnections.remove(userUuid);
+
+            // Обновляем статус на "Не в сети" и время последнего визита
+            updateUserStatus(userUuid, false);
+
+            // Уведомляем остальных
+            broadcastStatusUpdate(userUuid, false);
+        }
+        System.out.println("Отключился: " + userUuid + ". Осталось: " + activeConnections.size());
+    }
+
+    private void updateUserStatus(String userUuid, boolean isOnline) {
+        userRepository.findById(userUuid).ifPresent(user -> {
+            user.setOnline(isOnline);
+            user.setLastSeenAt(LocalDateTime.now());
+            userRepository.save(user);
+        });
+    }
+
+    private void broadcastStatusUpdate(String userUuid, boolean isOnline) {
+        try {
+            Map<String, Object> statusMsg = Map.of(
+                    "type", "USER_STATUS",
+                    "uuid", userUuid,
+                    "isOnline", isOnline,
+                    "lastSeenAt", LocalDateTime.now().toString()
+            );
+            String json = objectMapper.writeValueAsString(statusMsg);
+
+            for (WebSocketSession s : activeConnections.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(new TextMessage(json));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String getUserUuidFromSession(WebSocketSession session) {
+        String query = session.getUri() != null ? session.getUri().getQuery() : null;
+        if (query != null) {
+            for (String param : query.split("&")) {
+                String[] pair = param.split("=");
+                if (pair.length == 2 && "user_uuid".equals(pair[0])) {
+                    return pair[1];
+                }
+            }
+        }
+        return null;
     }
 }

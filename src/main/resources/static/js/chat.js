@@ -1,191 +1,441 @@
+window.openMyProfile = openMyProfile;
+window.openUserProfile = openUserProfile;
+window.closeProfileModal = closeProfileModal;
+window.handleLogout = handleLogout;
+window.uploadMyAvatar = uploadMyAvatar;
+window.saveMyProfile = saveMyProfile;
 
+let currentUserUuid = localStorage.getItem('uuid');
+let currentUsername = localStorage.getItem('username');
+let token = localStorage.getItem('token');
+let activeChatUser = null;
 let ws = null;
-let currentUser = {
-    uuid: localStorage.getItem('uuid'),
-    username: localStorage.getItem('username'),
-    token: localStorage.getItem('token')
-};
-let selectedUser = null; // { uuid, username }
-let allUsers = [];
 
+const DEFAULT_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%233c4f6f'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' fill='%23ffffff' font-size='18'>👤</text></svg>";
 
-if (!currentUser.token) {
-    window.location.href = 'login.html';
+if (!token || !currentUserUuid) {
+    window.location.href = '/login.html';
 }
-
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadUsers();
-    connectWebSocket();
-    setupEventListeners();
+    initApp();
 });
 
-function loadUsers() {
-    fetch('/profile/all', {
-        headers: { 'Authorization': 'Bearer ' + currentUser.token }
-    })
-        .then(res => {
-            if (!res.ok) throw new Error('Unauthorized');
-            return res.json();
-        })
-        .then(users => {
-            allUsers = users.filter(u => u.uuid !== currentUser.uuid);
-            renderUsers(allUsers);
-        })
-        .catch(err => {
-            console.error('Ошибка загрузки пользователей:', err);
-            if (err.message === 'Unauthorized') {
-                logout();
-            }
-        });
+function initApp() {
+    connectWebSocket();
+    loadAllUsers();
+    setupEventListeners();
 }
 
-function renderUsers(users) {
-    const container = document.getElementById('usersList');
-    container.innerHTML = '';
-    users.forEach(u => {
-        const div = document.createElement('div');
-        div.className = 'user-item';
-        if (selectedUser && selectedUser.uuid === u.uuid) {
-            div.classList.add('active');
-        }
-        div.innerHTML = `
-            <div class="username">${u.username}</div>
-            <span class="status ${u.lastSeenAt ? 'offline' : 'online'}"></span>
+// -------------------------------------------------------------
+// 1. ЗАГРУЗКА СПИСКА ПОЛЬЗОВАТЕЛЕЙ И ОБНОВЛЕНИЕ ЧАТА
+// -------------------------------------------------------------
+async function loadAllUsers() {
+    try {
+        const response = await fetch(`/api/users?currentUuid=${currentUserUuid}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Ошибка загрузки пользователей');
+
+        const users = await response.json();
+        renderUsersList(users);
+    } catch (err) {
+        console.error('Ошибка загрузки пользователей:', err);
+    }
+}
+
+function renderUsersList(users) {
+    const userListContainer = document.getElementById('user-list');
+    if (!userListContainer) return;
+
+    userListContainer.innerHTML = '';
+
+    if (users.length === 0) {
+        userListContainer.innerHTML = '<div style="padding: 15px; color: #888;">Нет других пользователей</div>';
+        return;
+    }
+
+    users.forEach(user => {
+        const item = document.createElement('div');
+        item.className = 'user-item';
+        item.setAttribute('data-uuid', user.uuid);
+
+        const statusClass = user.isOnline ? 'status-online' : 'status-offline';
+        const statusText = user.isOnline ? 'В сети' : 'Не в сети';
+        const avatarSrc = user.userImage || DEFAULT_AVATAR;
+
+        item.innerHTML = `
+            <div class="avatar" style="position: relative;" onclick="event.stopPropagation(); openUserProfile('${user.username}')">
+                <img src="${avatarSrc}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onError="this.onerror=null; this.src='${DEFAULT_AVATAR}';" />
+                <span class="status-badge ${statusClass}"></span>
+            </div>
+            <div class="info" style="margin-left: 10px; flex-grow: 1;">
+                <div class="name" style="font-weight: bold;">${user.username}</div>
+                <div class="user-item-status" style="font-size: 12px; color: ${user.isOnline ? '#2ec4b6' : '#888'};">${statusText}</div>
+            </div>
         `;
-        div.addEventListener('click', () => selectUser(u));
-        container.appendChild(div);
+
+        item.onclick = () => selectUserForChat(user);
+        userListContainer.appendChild(item);
     });
 }
 
-let lastMessages = [];
+function selectUserForChat(user) {
+    activeChatUser = user;
 
-function isDuplicate(msg) {
-    return lastMessages.some(m =>
-        m.text === msg.text &&
-        Math.abs(new Date(m.timestamp) - new Date(msg.timestamp)) < 2000
-    );
-}
-
-function addMessageToHistory(msg, isMine) {
-    if (isDuplicate(msg)) {
-        console.log('Дубль, пропускаем');
-        return;
-    }
-    lastMessages.push(msg);
-    if (lastMessages.length > 10) lastMessages.shift();
-    appendMessage(msg, isMine);
-}
-
-function selectUser(user) {
-    selectedUser = user;
     document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
-    const items = document.querySelectorAll('.user-item');
-    for (let el of items) {
-        if (el.textContent.trim() === user.username) {
-            el.classList.add('active');
-            break;
-        }
+    const selectedEl = document.querySelector(`[data-uuid="${user.uuid}"]`);
+    if (selectedEl) selectedEl.classList.add('active');
+
+    const headerName = document.getElementById('chat-header-name');
+    const headerStatus = document.getElementById('chat-header-status');
+    const headerAvatar = document.getElementById('chat-header-avatar');
+
+    if (headerName) headerName.textContent = user.username;
+    if (headerStatus) {
+        headerStatus.textContent = user.isOnline ? 'В сети' : 'Не в сети';
+        headerStatus.style.color = user.isOnline ? '#2ec4b6' : '#888';
     }
-    document.getElementById('chatHeader').textContent = `Чат с ${user.username}`;
-    document.getElementById('messageInput').disabled = false;
-    document.getElementById('sendBtn').disabled = false;
-    loadHistory(user.uuid);
+    if (headerAvatar) {
+        const avatarSrc = user.userImage || DEFAULT_AVATAR;
+        headerAvatar.innerHTML = `<img src="${avatarSrc}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" onError="this.onerror=null; this.src='${DEFAULT_AVATAR}';" />`;
+        headerAvatar.onclick = () => openUserProfile(user.username);
+    }
+
+    document.getElementById('message-input').disabled = false;
+    document.getElementById('send-btn').disabled = false;
+
+    loadChatHistory(user.uuid);
 }
 
-function loadHistory(otherUuid) {
-    fetch(`/messages/${currentUser.uuid}/${otherUuid}`, {
-        headers: { 'Authorization': 'Bearer ' + currentUser.token }
-    })
-        .then(res => res.json())
-        .then(messages => {
-            const container = document.getElementById('messages');
-            container.innerHTML = '';
+async function loadChatHistory(receiverUuid) {
+    const chatContainer = document.getElementById('chat-messages');
+    if (!chatContainer) return;
+    chatContainer.innerHTML = '';
+
+    try {
+        const response = await fetch(`/messages/${currentUserUuid}/${receiverUuid}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            const messages = await response.json();
             messages.forEach(msg => {
-                appendMessage(msg, false);
+                const formattedMsg = {
+                    senderUuid: msg.sender ? msg.sender.uuid : msg.senderUuid,
+                    text: msg.text
+                };
+                appendMessageToChat(formattedMsg);
             });
-            container.scrollTop = container.scrollHeight;
-        })
-        .catch(console.error);
+        }
+    } catch (e) {
+        console.error('Ошибка загрузки истории сообщений:', e);
+    }
 }
 
-function appendMessage(msg, isMine) {
-    const container = document.getElementById('messages');
-    const div = document.createElement('div');
-    div.className = `message ${isMine ? 'sent' : 'received'}`;
-    const time = new Date(msg.timestamp).toLocaleTimeString();
-    div.innerHTML = `
-        <span>${msg.text}</span>
-        <span class="time">${time}</span>
-    `;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
+// -------------------------------------------------------------
+// 2. WEBSOCKET И ОТПРАВКА СООБЩЕНИЙ
+// -------------------------------------------------------------
 function connectWebSocket() {
-    const wsUrl = `ws://localhost:8080/ws?user_uuid=${currentUser.uuid}`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws?user_uuid=${currentUserUuid}`;
+
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-        console.log('WebSocket подключён');
+        console.log("WebSocket подключен");
+        // После подключения перезагружаем список, чтобы подтянуть свежие онлайн-статусы
+        loadAllUsers();
     };
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.senderUuid === currentUser.uuid || data.receiverUuid === currentUser.uuid) {
-            const other = data.senderUuid === currentUser.uuid ? data.receiverUuid : data.senderUuid;
-            if (selectedUser && selectedUser.uuid === other) {
-                const isMine = data.senderUuid === currentUser.uuid;
-                addMessageToHistory(data, isMine);
-            } else {
-                console.log('Новое сообщение от', data.senderUsername);
+
+        if (data.type === 'USER_STATUS') {
+            updateUserOnlineBadge(data.uuid, data.isOnline);
+        } else if (data.type === 'CHAT_MESSAGE') {
+            if (activeChatUser && (data.senderUuid === activeChatUser.uuid || data.senderUuid === currentUserUuid)) {
+                appendMessageToChat(data);
             }
         }
     };
 
     ws.onclose = () => {
-        console.log('WebSocket закрыт, переподключение через 3 сек...');
         setTimeout(connectWebSocket, 3000);
     };
+}
 
-    ws.onerror = (err) => {
-        console.error('WebSocket ошибка:', err);
-        ws.close();
-    };
+function updateUserOnlineBadge(uuid, isOnline) {
+    // 1. Обновляем элемент в списке слева
+    const userItem = document.querySelector(`[data-uuid="${uuid}"]`);
+    if (userItem) {
+        const badge = userItem.querySelector('.status-badge');
+        const statusText = userItem.querySelector('.user-item-status');
+
+        if (badge) {
+            badge.className = `status-badge ${isOnline ? 'status-online' : 'status-offline'}`;
+        }
+        if (statusText) {
+            statusText.textContent = isOnline ? 'В сети' : 'Не в сети';
+            statusText.style.color = isOnline ? '#2ec4b6' : '#888';
+        }
+    }
+
+    // 2. Если открыт чат именно с этим пользователем — обновляем шапку
+    if (activeChatUser && activeChatUser.uuid === uuid) {
+        activeChatUser.isOnline = isOnline;
+        const headerStatus = document.getElementById('chat-header-status');
+        if (headerStatus) {
+            headerStatus.textContent = isOnline ? 'В сети' : 'Не в сети';
+            headerStatus.style.color = isOnline ? '#2ec4b6' : '#888';
+        }
+    }
 }
 
 function sendMessage() {
-    if (!selectedUser) {
-        alert('Выберите собеседника');
-        return;
-    }
-    const input = document.getElementById('messageInput');
+    const input = document.getElementById('message-input');
+    if (!input || !activeChatUser) return;
+
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
     const payload = {
-        senderUuid: currentUser.uuid,
-        receiverUuid: selectedUser.uuid,
+        senderUuid: currentUserUuid,
+        receiverUuid: activeChatUser.uuid,
         text: text
     };
 
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(payload));
-        input.value = '';
-    } else {
-        alert('WebSocket не подключён');
+    ws.send(JSON.stringify(payload));
+    input.value = '';
+}
+
+function appendMessageToChat(msg) {
+    const chatContainer = document.getElementById('chat-messages');
+    if (!chatContainer) return;
+
+    const emptyNotice = chatContainer.querySelector('.empty-chat');
+    if (emptyNotice) emptyNotice.remove();
+
+    const isMine = msg.senderUuid === currentUserUuid;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `message-bubble ${isMine ? 'own' : ''}`;
+    msgDiv.textContent = msg.text;
+
+    chatContainer.appendChild(msgDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// -------------------------------------------------------------
+// 3. ФУНКЦИОНАЛ ПРОФИЛЕЙ (СВОЙ И ЧУЖОЙ)
+// -------------------------------------------------------------
+
+// Открыть МОЙ профиль (с редактированием)
+async function openMyProfile() {
+    try {
+        const response = await fetch(`/profile/${currentUserUuid}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return;
+
+        const user = await response.json();
+        const modal = document.getElementById('profile-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalContent = document.getElementById('profile-modal-content');
+
+        if (modalTitle) modalTitle.textContent = "Мой профиль";
+
+        const avatarSrc = user.userImage || DEFAULT_AVATAR;
+
+        if (modalContent) {
+            modalContent.innerHTML = `
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <img id="my-avatar-preview" src="${avatarSrc}" alt="Аватар пользователя" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover;" onError="this.onerror=null; this.src='${DEFAULT_AVATAR}';" />
+                    <div style="margin-top: 8px;">
+                        <input type="file" id="avatar-input" name="avatar" accept="image/*" style="display: none;" onchange="uploadMyAvatar(this)">
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('avatar-input').click()">Изменить фото</button>
+                    </div>
+                </div>
+                
+                <div class="field" style="margin-bottom: 12px;">
+                    <label for="edit-username" style="display: block; font-weight: bold; margin-bottom: 4px;">Имя пользователя</label>
+                    <input type="text" id="edit-username" name="username" value="${user.username}" style="width: 100%; padding: 8px; box-sizing: border-box;">
+                </div>
+
+                <div class="field" style="margin-bottom: 12px;">
+                    <label for="edit-email" style="display: block; font-weight: bold; margin-bottom: 4px;">Email (нельзя изменить)</label>
+                    <input type="email" id="edit-email" name="email" value="${user.email}" disabled style="width: 100%; padding: 8px; box-sizing: border-box; background: #f0f0f0;">
+                </div>
+
+                <div class="field" style="margin-bottom: 12px;">
+                    <label for="edit-bio" style="display: block; font-weight: bold; margin-bottom: 4px;">О себе (Bio)</label>
+                    <textarea id="edit-bio" name="bio" placeholder="Расскажите о себе..." style="width: 100%; height: 80px; padding: 8px; box-sizing: border-box;">${user.bio || ''}</textarea>
+                </div>
+
+                <div id="profile-msg" style="margin-top: 10px; font-size: 14px; min-height: 20px;"></div>
+
+                <div class="actions" style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn-primary" onclick="saveMyProfile()">Сохранить</button>
+                    <button type="button" class="btn-secondary" onclick="closeProfileModal()">Отмена</button>
+                </div>
+            `;
+        }
+
+        if (modal) modal.classList.add('open');
+    } catch (e) {
+        console.error('Ошибка загрузки профиля:', e);
     }
 }
 
-function setupEventListeners() {
-    document.getElementById('sendBtn').addEventListener('click', sendMessage);
-    document.getElementById('messageInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
+// Загрузка аватарки на сервер
+async function uploadMyAvatar(input) {
+    if (!input.files || !input.files[0]) return;
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    const msgDiv = document.getElementById('profile-msg');
+    msgDiv.style.color = '#1976d2';
+    msgDiv.textContent = 'Загрузка фото...';
+
+    try {
+        const response = await fetch(`/profile/${currentUserUuid}/upload-image`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        if (response.ok) {
+            msgDiv.style.color = '#2e7d32';
+            msgDiv.textContent = 'Фото успешно обновлено!';
+            // Перезагружаем собственный профиль, чтобы обновился preview
+            openMyProfile();
+            loadAllUsers();
+        } else {
+            throw new Error('Не удалось загрузить фото');
+        }
+    } catch (e) {
+        msgDiv.style.color = '#d32f2f';
+        msgDiv.textContent = e.message;
+    }
 }
 
-function logout() {
-    localStorage.clear();
-    if (ws) ws.close();
-    window.location.href = 'login.html';
+// Сохранение текста (username и bio)
+async function saveMyProfile() {
+    const newUsername = document.getElementById('edit-username').value.trim();
+    const newBio = document.getElementById('edit-bio').value.trim();
+    const msgDiv = document.getElementById('profile-msg');
+
+    try {
+        const response = await fetch(`/profile/${currentUserUuid}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                username: newUsername,
+                bio: newBio
+            })
+        });
+
+        if (response.ok) {
+            localStorage.setItem('username', newUsername);
+            currentUsername = newUsername;
+
+            msgDiv.style.color = '#2e7d32';
+            msgDiv.textContent = 'Профиль сохранен!';
+
+            setTimeout(() => {
+                closeProfileModal();
+                loadAllUsers();
+            }, 1000);
+        } else {
+            throw new Error('Ошибка сохранения');
+        }
+    } catch (e) {
+        msgDiv.style.color = '#d32f2f';
+        msgDiv.textContent = 'Не удалось сохранить изменения';
+    }
 }
+
+// Открыть ЧУЖОЙ профиль (просмотр)
+async function openUserProfile(username) {
+    // Если это собственный юзернейм — открываем редактирование
+    if (username === currentUsername) {
+        openMyProfile();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/users/${username}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+
+        const user = await response.json();
+        const modal = document.getElementById('profile-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalContent = document.getElementById('profile-modal-content');
+
+        if (modalTitle) modalTitle.textContent = "Профиль";
+
+        const avatarSrc = user.userImage || DEFAULT_AVATAR;
+
+        if (modalContent) {
+            modalContent.innerHTML = `
+                <div style="text-align: center; padding: 10px;">
+                    <img src="${avatarSrc}" style="width: 100px; height: 100px; border-radius: 50%; margin-bottom: 10px; object-fit: cover;" onError="this.onerror=null; this.src='${DEFAULT_AVATAR}';" />
+                    <h2>${user.username}</h2>
+                    <p style="color: #666; margin-top: 4px;">${user.email}</p>
+                    <p style="margin-top: 12px;">Статус: <b>${user.isOnline ? '🟢 В сети' : '⚪ Не в сети'}</b></p>
+                    <div style="margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 8px;">
+                        <b>О себе:</b>
+                        <p style="margin-top: 4px; color: #444;">${user.bio || 'Пользователь ничего не указал о себе.'}</p>
+                    </div>
+                    <div class="actions" style="margin-top: 20px;">
+                        <button class="btn-secondary" onclick="closeProfileModal()">Закрыть</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (modal) modal.classList.add('open');
+    } catch (e) {
+        console.error('Ошибка открытия профиля:', e);
+    }
+}
+
+function closeProfileModal() {
+    const modal = document.getElementById('profile-modal');
+    if (modal) modal.classList.remove('open');
+}
+
+function handleLogout() {
+    localStorage.clear();
+    window.location.href = '/login.html';
+}
+
+function setupEventListeners() {
+    const msgInput = document.getElementById('message-input');
+    if (msgInput) {
+        msgInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    }
+
+    const sendBtn = document.getElementById('send-btn');
+    if (sendBtn) sendBtn.onclick = sendMessage;
+
+    const myProfileBtn = document.getElementById('profile-btn');
+    if (myProfileBtn) {
+        myProfileBtn.onclick = openMyProfile;
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.onclick = handleLogout;
+    }
+}
+
