@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messenger - Чат</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .chat-container {
+            display: flex;
+            height: 80vh;
+            margin: 20px auto;
+            max-width: 1200px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px #ccc;
+            overflow: hidden;
+        }
+        .users-list {
+            width: 30%;
+            border-right: 1px solid #ddd;
+            padding: 15px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+        .users-list h3 {
+            margin-top: 0;
+        }
+        .user-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        .user-item:hover {
+            background: #e3f2fd;
+        }
+        .user-item.active {
+            background: #bbdefb;
+            font-weight: bold;
+        }
+        .user-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+            object-fit: cover;
+            background: #ddd;
+        }
+        .user-item .username {
+            flex: 1;
+        }
+        .user-item .status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        .status.online { background: #4caf50; }
+        .status.offline { background: #aaa; }
+
+        .chat-area {
+            width: 70%;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        .messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            max-width: 70%;
+            margin-bottom: 10px;
+            padding: 8px 14px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .message.sent {
+            align-self: flex-end;
+            background: #1976d2;
+            color: white;
+        }
+        .message.received {
+            align-self: flex-start;
+            background: #f1f1f1;
+            color: black;
+        }
+        .message .time {
+            font-size: 0.7em;
+            opacity: 0.7;
+            margin-left: 10px;
+        }
+        .input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            background: #fafafa;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            margin-right: 10px;
+        }
+        .input-area button {
+            padding: 10px 20px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        .input-area button:hover {
+            background: #1976d2;
+        }
+        .logout-btn {
+            float: right;
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Messenger</h1>
+        <button class="logout-btn" onclick="logout()">Выйти</button>
+    </div>
+    <div class="chat-container">
+        <div class="users-list">
+            <h3>Контакты</h3>
+            <div id="usersList"></div>
+        </div>
+        <div class="chat-area">
+            <div class="chat-header" id="chatHeader">Выберите собеседника</div>
+            <div class="messages" id="messages"></div>
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
+                <button id="sendBtn" disabled>Отправить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/chat.js"></script>
+</body>
+</html>
