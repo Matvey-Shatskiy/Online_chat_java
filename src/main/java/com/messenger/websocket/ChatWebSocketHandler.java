@@ -6,6 +6,7 @@ import com.messenger.model.User;
 import com.messenger.repository.MessageRepository;
 import com.messenger.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -32,10 +33,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (userUuid != null && !userUuid.isEmpty()) {
             activeConnections.put(userUuid, session);
 
-            // Обновляем статус на "В сети"
             updateUserStatus(userUuid, true);
 
-            // Уведомляем остальных
             broadcastStatusUpdate(userUuid, true);
 
             System.out.println("Новое подключение: " + userUuid + ". Всего: " + activeConnections.size());
@@ -45,7 +44,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage textMessage) throws Exception {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        String userUuid = getUserUuidFromSession(session);
+        if (userUuid != null) {
+            boolean removed = activeConnections.remove(userUuid, session);
+
+            if (removed) {
+                updateUserStatus(userUuid, false);
+
+                broadcastStatusUpdate(userUuid, false);
+            }
+        }
+        System.out.println("Отключился: " + userUuid + ". Осталось: " + activeConnections.size());
+    }
+
+    @Override
+    protected void handleTextMessage(@NonNull WebSocketSession session, TextMessage textMessage) throws Exception {
         Map<String, String> data = objectMapper.readValue(textMessage.getPayload(), Map.class);
 
         String senderUuid = data.get("senderUuid");
@@ -86,21 +100,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (senderSession != null && senderSession.isOpen() && !senderUuid.equals(receiverUuid)) {
             senderSession.sendMessage(new TextMessage(responseJson));
         }
-    }
-
-    @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        String userUuid = getUserUuidFromSession(session);
-        if (userUuid != null) {
-            activeConnections.remove(userUuid);
-
-            // Обновляем статус на "Не в сети" и время последнего визита
-            updateUserStatus(userUuid, false);
-
-            // Уведомляем остальных
-            broadcastStatusUpdate(userUuid, false);
-        }
-        System.out.println("Отключился: " + userUuid + ". Осталось: " + activeConnections.size());
     }
 
     private void updateUserStatus(String userUuid, boolean isOnline) {

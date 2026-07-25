@@ -1,4 +1,3 @@
-// auth.js
 import { registerUser, loginUser } from './api.js';
 
 export function initLogin() {

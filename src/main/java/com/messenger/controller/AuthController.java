@@ -42,7 +42,6 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody AuthRequest request) {
         Optional<User> userOpt = Optional.empty();
 
-        // Поиск по Email или по Username (гибкий вход)
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
             userOpt = userRepository.findByEmail(request.getEmail());
         } else if (request.getUsername() != null && !request.getUsername().isBlank()) {

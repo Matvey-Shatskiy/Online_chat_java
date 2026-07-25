@@ -34,7 +34,6 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
-    // Поля для отслеживания статуса и времени визита
     private boolean isOnline = false;
 
     private LocalDateTime lastSeenAt;

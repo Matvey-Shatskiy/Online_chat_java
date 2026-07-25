@@ -27,9 +27,6 @@ function initApp() {
     setupEventListeners();
 }
 
-// -------------------------------------------------------------
-// 1. ЗАГРУЗКА СПИСКА ПОЛЬЗОВАТЕЛЕЙ И ОБНОВЛЕНИЕ ЧАТА
-// -------------------------------------------------------------
 async function loadAllUsers() {
     try {
         const response = await fetch(`/api/users?currentUuid=${currentUserUuid}`, {
@@ -61,8 +58,10 @@ function renderUsersList(users) {
         item.className = 'user-item';
         item.setAttribute('data-uuid', user.uuid);
 
-        const statusClass = user.isOnline ? 'status-online' : 'status-offline';
-        const statusText = user.isOnline ? 'В сети' : 'Не в сети';
+        const isOnline = user.isOnline !== undefined ? user.isOnline : (user.online || false);
+
+        const statusClass = isOnline ? 'status-online' : 'status-offline';
+        const statusText = isOnline ? 'В сети' : 'Не в сети';
         const avatarSrc = user.userImage || DEFAULT_AVATAR;
 
         item.innerHTML = `
@@ -72,7 +71,7 @@ function renderUsersList(users) {
             </div>
             <div class="info" style="margin-left: 10px; flex-grow: 1;">
                 <div class="name" style="font-weight: bold;">${user.username}</div>
-                <div class="user-item-status" style="font-size: 12px; color: ${user.isOnline ? '#2ec4b6' : '#888'};">${statusText}</div>
+                <div class="user-item-status" style="font-size: 12px; color: ${isOnline ? '#2ec4b6' : '#888'};">${statusText}</div>
             </div>
         `;
 
@@ -134,9 +133,6 @@ async function loadChatHistory(receiverUuid) {
     }
 }
 
-// -------------------------------------------------------------
-// 2. WEBSOCKET И ОТПРАВКА СООБЩЕНИЙ
-// -------------------------------------------------------------
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws?user_uuid=${currentUserUuid}`;
@@ -145,7 +141,6 @@ function connectWebSocket() {
 
     ws.onopen = () => {
         console.log("WebSocket подключен");
-        // После подключения перезагружаем список, чтобы подтянуть свежие онлайн-статусы
         loadAllUsers();
     };
 
@@ -167,7 +162,6 @@ function connectWebSocket() {
 }
 
 function updateUserOnlineBadge(uuid, isOnline) {
-    // 1. Обновляем элемент в списке слева
     const userItem = document.querySelector(`[data-uuid="${uuid}"]`);
     if (userItem) {
         const badge = userItem.querySelector('.status-badge');
@@ -182,7 +176,6 @@ function updateUserOnlineBadge(uuid, isOnline) {
         }
     }
 
-    // 2. Если открыт чат именно с этим пользователем — обновляем шапку
     if (activeChatUser && activeChatUser.uuid === uuid) {
         activeChatUser.isOnline = isOnline;
         const headerStatus = document.getElementById('chat-header-status');
@@ -226,11 +219,7 @@ function appendMessageToChat(msg) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-// -------------------------------------------------------------
-// 3. ФУНКЦИОНАЛ ПРОФИЛЕЙ (СВОЙ И ЧУЖОЙ)
-// -------------------------------------------------------------
 
-// Открыть МОЙ профиль (с редактированием)
 async function openMyProfile() {
     try {
         const response = await fetch(`/profile/${currentUserUuid}`, {
@@ -288,7 +277,6 @@ async function openMyProfile() {
     }
 }
 
-// Загрузка аватарки на сервер
 async function uploadMyAvatar(input) {
     if (!input.files || !input.files[0]) return;
 
@@ -309,9 +297,8 @@ async function uploadMyAvatar(input) {
         if (response.ok) {
             msgDiv.style.color = '#2e7d32';
             msgDiv.textContent = 'Фото успешно обновлено!';
-            // Перезагружаем собственный профиль, чтобы обновился preview
-            openMyProfile();
-            loadAllUsers();
+            await openMyProfile();
+            await loadAllUsers();
         } else {
             throw new Error('Не удалось загрузить фото');
         }
@@ -321,7 +308,6 @@ async function uploadMyAvatar(input) {
     }
 }
 
-// Сохранение текста (username и bio)
 async function saveMyProfile() {
     const newUsername = document.getElementById('edit-username').value.trim();
     const newBio = document.getElementById('edit-bio').value.trim();
@@ -360,9 +346,7 @@ async function saveMyProfile() {
     }
 }
 
-// Открыть ЧУЖОЙ профиль (просмотр)
 async function openUserProfile(username) {
-    // Если это собственный юзернейм — открываем редактирование
     if (username === currentUsername) {
         openMyProfile();
         return;

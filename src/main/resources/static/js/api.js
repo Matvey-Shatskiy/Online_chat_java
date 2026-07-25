@@ -17,7 +17,6 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
     }
     const response = await fetch(API_BASE + endpoint, options);
     if (!response.ok) {
-        // Пытаемся извлечь сообщение из JSON-ответа
         let errorMessage = `Ошибка ${response.status}`;
         try {
             const errorData = await response.json();
@@ -94,7 +93,7 @@ export async function uploadAvatar(uuid, file) {
         const err = await response.text();
         throw new Error(err);
     }
-    return response.text(); // возвращает сообщение, например, путь к картинке
+    return response.text();
 }
 
 export async function getChatHistory(user1, user2) {

@@ -16,7 +16,6 @@ public class MessengerApplication {
         System.out.println(" Messenger Application started successfully!");
     }
 
-    // При старте приложения сбрасываем у всех статус online в false
     @Bean
     public CommandLineRunner resetUserStatuses(UserRepository userRepository) {
         return args -> {

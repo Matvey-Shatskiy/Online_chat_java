@@ -1,5 +1,6 @@
 package com.messenger.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.messenger.model.User;
 import com.messenger.repository.UserRepository;
 import lombok.AllArgsConstructor;
@@ -19,13 +20,11 @@ public class UserController {
 
     private final UserRepository userRepository;
 
-    // Получение СПИСКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers(@RequestParam(value = "currentUuid", required = false) String currentUuid) {
         List<User> users = userRepository.findAll();
 
         List<UserDto> dtos = users.stream()
-                // Исключаем самого себя из общего списка контактов
                 .filter(u -> currentUuid == null || !u.getUuid().equals(currentUuid))
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
@@ -33,7 +32,6 @@ public class UserController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Поиск пользователей по имени
     @GetMapping("/search")
     public ResponseEntity<List<UserDto>> searchUsers(@RequestParam("query") String query) {
         if (query == null || query.trim().isEmpty()) {
@@ -48,7 +46,6 @@ public class UserController {
         return ResponseEntity.ok(dtos);
     }
 
-    // Получение профиля по имя пользователя или UUID
     @GetMapping("/{username}")
     public ResponseEntity<UserDto> getUserProfile(@PathVariable String username) {
         return userRepository.findByUsername(username)
@@ -76,7 +73,10 @@ public class UserController {
         private String email;
         private String userImage;
         private String bio;
+
+        @JsonProperty("isOnline")
         private boolean isOnline;
+
         private LocalDateTime lastSeenAt;
     }
 }
