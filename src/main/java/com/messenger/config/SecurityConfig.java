@@ -54,7 +54,8 @@ public class SecurityConfig {
                                 "/register",
                                 "/login",
                                 "/ws/**",
-                                "/uploads/**"
+                                "/uploads/**",
+                                "/error"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

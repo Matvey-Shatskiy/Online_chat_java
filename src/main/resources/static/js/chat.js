@@ -10,6 +10,9 @@ let currentUsername = localStorage.getItem('username');
 let token = localStorage.getItem('token');
 let activeChatUser = null;
 let ws = null;
+let currentPage = 0;
+let totalPages = 1;
+let isLoadingUsers = false;
 
 const DEFAULT_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%233c4f6f'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' fill='%23ffffff' font-size='18'>👤</text></svg>";
 
@@ -27,28 +30,45 @@ function initApp() {
     setupEventListeners();
 }
 
-async function loadAllUsers() {
+async function loadAllUsers(page = 0, append = false) {
+    if (isLoadingUsers) return;
+    isLoadingUsers = true;
+
     try {
-        const response = await fetch(`/api/users?currentUuid=${currentUserUuid}`, {
+        // Передаем параметры page и size=20 в Spring
+        const response = await fetch(`/api/users?currentUuid=${currentUserUuid}&page=${page}&size=20`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (!response.ok) throw new Error('Ошибка загрузки пользователей');
 
-        const users = await response.json();
-        renderUsersList(users);
+        const data = await response.json();
+
+        // Если с бэкенда пришел объект Page из Spring
+        if (data.content) {
+            currentPage = data.number;      // текущий номер страницы (начиная с 0)
+            totalPages = data.totalPages;  // всего страниц
+            renderUsersList(data.content, append);
+        } else {
+            renderUsersList(data, append);
+        }
     } catch (err) {
         console.error('Ошибка загрузки пользователей:', err);
+    } finally {
+        isLoadingUsers = false;
     }
 }
 
-function renderUsersList(users) {
+function renderUsersList(users, append = false) {
     const userListContainer = document.getElementById('user-list');
     if (!userListContainer) return;
 
-    userListContainer.innerHTML = '';
+    // Очищаем список только если это первая загрузка (не подгрузка при скролле)
+    if (!append) {
+        userListContainer.innerHTML = '';
+    }
 
-    if (users.length === 0) {
+    if (users.length === 0 && !append) {
         userListContainer.innerHTML = '<div style="padding: 15px; color: #888;">Нет других пользователей</div>';
         return;
     }
@@ -59,7 +79,6 @@ function renderUsersList(users) {
         item.setAttribute('data-uuid', user.uuid);
 
         const isOnline = user.isOnline !== undefined ? user.isOnline : (user.online || false);
-
         const statusClass = isOnline ? 'status-online' : 'status-offline';
         const statusText = isOnline ? 'В сети' : 'Не в сети';
         const avatarSrc = user.userImage || DEFAULT_AVATAR;
@@ -79,7 +98,6 @@ function renderUsersList(users) {
         userListContainer.appendChild(item);
     });
 }
-
 function selectUserForChat(user) {
     activeChatUser = user;
 
@@ -222,7 +240,7 @@ function appendMessageToChat(msg) {
 
 async function openMyProfile() {
     try {
-        const response = await fetch(`/profile/${currentUserUuid}`, {
+        const response = await fetch(`/profile/me`,  {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -288,7 +306,7 @@ async function uploadMyAvatar(input) {
     msgDiv.textContent = 'Загрузка фото...';
 
     try {
-        const response = await fetch(`/profile/${currentUserUuid}/upload-image`, {
+        const response = await fetch(`/profile/me/upload-image`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -314,7 +332,7 @@ async function saveMyProfile() {
     const msgDiv = document.getElementById('profile-msg');
 
     try {
-        const response = await fetch(`/profile/${currentUserUuid}`, {
+        const response = await fetch(`/profile/me`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -420,6 +438,15 @@ function setupEventListeners() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.onclick = handleLogout;
+    }
+    const userListContainer = document.getElementById('user-list');
+    if (userListContainer) {
+        userListContainer.addEventListener('scroll', () => {
+            const isAtBottom = userListContainer.scrollTop + userListContainer.clientHeight >= userListContainer.scrollHeight - 10;
+            if (isAtBottom && (currentPage + 1 < totalPages) && !isLoadingUsers) {
+                loadAllUsers(currentPage + 1, true);
+            }
+        });
     }
 }
 

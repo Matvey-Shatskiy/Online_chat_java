@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  messenger:
+    build: .
+    container_name: messenger-container
+    expose:
+      - "8080"
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - messenger
+    restart: always

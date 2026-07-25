@@ -21,16 +21,16 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(String email) {
+    public String generateToken(String uuid) {
         return Jwts.builder()
-                .subject(email)
+                .subject(uuid)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
                 .compact();
     }
 
-    public String extractEmail(String token) {
+    public String extractUuid(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()

@@ -50,6 +50,10 @@ src/
 │   └── resources/
 │       ├── static/         # Frontend (HTML, CSS, JS, изображения)
 │       └── application.properties # Конфигурация приложения
+└──test/
+    └──java/com/messenger/
+        └──controller/      # Интеграционные тесты
+    
 ```
 
 ## 🔧 Запуск проекта локально
@@ -58,6 +62,7 @@ src/
 
 - **JDK 17** или выше
 - **Maven 3.8+** 
+- **Docker**
 
 ### Шаги для запуска
 
@@ -75,7 +80,16 @@ src/
    JWT_EXPIRATION=86400000
    ```
 
-3. **Соберите и запустите проект:**
+3. **Тестирование проекта:**
+
+   ```
+   # Для Linux / macOS
+   ./mvn test
+   
+   # Для Windows
+   mvn.cmd clean test
+   ```
+4. **Соберите и запустите проект:**
 
    ```
    # Для Linux / macOS
@@ -84,5 +98,10 @@ src/
    # Для Windows
    mvn.cmd clean spring-boot:run
    ```
+5. **Запуск через Docker**
 
-4. **Откройте приложение в браузере:** Перейдите по адресу: http://localhost:8080
+   ```
+   # Для Windows / Linux / macOS
+   docker compose up --build
+   ```
+6. **Откройте приложение в браузере:** Перейдите по адресу: http://localhost:8080

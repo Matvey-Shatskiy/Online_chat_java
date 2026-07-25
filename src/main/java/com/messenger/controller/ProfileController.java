@@ -7,10 +7,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.Principal;
 import java.util.Optional;
 
 @RestController
@@ -22,16 +24,18 @@ public class ProfileController {
 
     private static final String UPLOAD_DIR = "uploads/";
 
-    @GetMapping("/{uuid}")
-    public ResponseEntity<User> getProfile(@PathVariable String uuid) {
-        return userRepository.findById(uuid)
+    @GetMapping("/me")
+    public ResponseEntity<User> getMyProfile(Principal principal) {
+        String userUuid = principal.getName();
+        return userRepository.findById(userUuid)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{uuid}")
-    public ResponseEntity<?> updateProfile(@PathVariable String uuid,
+    @PutMapping("/me")
+    public ResponseEntity<?> updateProfile(Principal principal,
                                            @RequestBody User updatedUser) {
+        String uuid = principal.getName();
         Optional<User> userOpt = userRepository.findById(uuid);
         if (userOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -50,9 +54,10 @@ public class ProfileController {
         return ResponseEntity.ok(user);
     }
 
-    @PostMapping("/{uuid}/upload-image")
-    public ResponseEntity<?> uploadImage(@PathVariable String uuid,
+    @PostMapping("/me/upload-image")
+    public ResponseEntity<?> uploadImage(Principal principal,
                                          @RequestParam("file") MultipartFile file) {
+        String uuid = principal.getName();
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("Файл пустой");
         }

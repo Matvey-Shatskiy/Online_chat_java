@@ -50,7 +50,7 @@ public class AuthController {
 
         if (userOpt.isPresent() && passwordEncoder.matches(request.getPassword(), userOpt.get().getPasswordHash())) {
             User user = userOpt.get();
-            String token = jwtUtil.generateToken(user.getEmail());
+            String token = jwtUtil.generateToken(user.getUuid());
             AuthResponse response = new AuthResponse(token, user.getUuid(), user.getUsername());
             return ResponseEntity.ok(response);
         }

@@ -6,12 +6,13 @@ import com.messenger.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -21,29 +22,35 @@ public class UserController {
     private final UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<UserDto>> getAllUsers(@RequestParam(value = "currentUuid", required = false) String currentUuid) {
-        List<User> users = userRepository.findAll();
+    public ResponseEntity<Page<UserDto>> getAllUsers(
+            @RequestParam(value = "currentUuid", required = false) String currentUuid,
+            @PageableDefault(size = 20, sort = "username") Pageable pageable) {
 
-        List<UserDto> dtos = users.stream()
-                .filter(u -> currentUuid == null || !u.getUuid().equals(currentUuid))
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+        Page<User> usersPage;
 
-        return ResponseEntity.ok(dtos);
+        if (currentUuid != null && !currentUuid.isBlank()) {
+            usersPage = userRepository.findByUuidNot(currentUuid, pageable);
+        } else {
+            usersPage = userRepository.findAll(pageable);
+        }
+        Page<UserDto> dtosPage = usersPage.map(this::mapToDto);
+
+        return ResponseEntity.ok(dtosPage);
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<UserDto>> searchUsers(@RequestParam("query") String query) {
+    public ResponseEntity<Page<UserDto>> searchUsers(
+            @RequestParam("query") String query,
+            @PageableDefault(size = 20, sort = "username") Pageable pageable) {
+
         if (query == null || query.trim().isEmpty()) {
-            return ResponseEntity.ok(List.of());
+            return ResponseEntity.ok(Page.empty());
         }
 
-        List<User> users = userRepository.findByUsernameContainingIgnoreCase(query.trim());
-        List<UserDto> dtos = users.stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+        Page<User> usersPage = userRepository.findByUsernameContainingIgnoreCase(query.trim(), pageable);
+        Page<UserDto> dtosPage = usersPage.map(this::mapToDto);
 
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(dtosPage);
     }
 
     @GetMapping("/{username}")
