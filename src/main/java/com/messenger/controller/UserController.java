@@ -23,16 +23,20 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<Page<UserDto>> getAllUsers(
-            @RequestParam(value = "currentUuid", required = false) String currentUuid,
+            @RequestParam(value = "userUuid", required = false) String userUuid,
+            @RequestParam(value = "usernameLike", required = false) String usernameLike,
             @PageableDefault(size = 20, sort = "username") Pageable pageable) {
 
         Page<User> usersPage;
 
-        if (currentUuid != null && !currentUuid.isBlank()) {
-            usersPage = userRepository.findByUuidNot(currentUuid, pageable);
+        if (usernameLike != null && !usernameLike.isBlank()){
+            usersPage = userRepository.findByUsernameContainingIgnoreCaseAndUuidNot(usernameLike,userUuid, pageable);
+        } else if (userUuid != null && !userUuid.isBlank()) {
+            usersPage = userRepository.findByUuidNot(userUuid, pageable);
         } else {
             usersPage = userRepository.findAll(pageable);
         }
+
         Page<UserDto> dtosPage = usersPage.map(this::mapToDto);
 
         return ResponseEntity.ok(dtosPage);

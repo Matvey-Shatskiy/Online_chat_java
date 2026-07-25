@@ -35,8 +35,9 @@ async function loadAllUsers(page = 0, append = false) {
     isLoadingUsers = true;
 
     try {
+        const usernameLike = document.getElementById('search-input').value.trim();
         // Передаем параметры page и size=20 в Spring
-        const response = await fetch(`/api/users?currentUuid=${currentUserUuid}&page=${page}&size=20`, {
+        const response = await fetch(`/api/users?userUuid=${currentUserUuid}&usernameLike=${usernameLike}&page=${page}&size=20`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -427,6 +428,13 @@ function setupEventListeners() {
         });
     }
 
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadAllUsers(0, false);
+        });
+    }
+
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) sendBtn.onclick = sendMessage;
 
@@ -439,6 +447,11 @@ function setupEventListeners() {
     if (logoutBtn) {
         logoutBtn.onclick = handleLogout;
     }
+
+    const searchBtn = document.getElementById('search-btn');
+    if (searchBtn) {
+        searchBtn.onclick = () => loadAllUsers(0, false);    }
+
     const userListContainer = document.getElementById('user-list');
     if (userListContainer) {
         userListContainer.addEventListener('scroll', () => {
