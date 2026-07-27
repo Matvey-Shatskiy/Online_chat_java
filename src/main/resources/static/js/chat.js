@@ -44,11 +44,10 @@ async function loadAllUsers(page = 0, append = false) {
         if (!response.ok) throw new Error('Ошибка загрузки пользователей');
 
         const data = await response.json();
-
         // Если с бэкенда пришел объект Page из Spring
         if (data.content) {
-            currentPage = data.number;      // текущий номер страницы (начиная с 0)
-            totalPages = data.totalPages;  // всего страниц
+            currentPage = data.page.number;      // текущий номер страницы (начиная с 0)
+            totalPages = data.page.totalPages;
             renderUsersList(data.content, append);
         } else {
             renderUsersList(data, append);
@@ -58,6 +57,44 @@ async function loadAllUsers(page = 0, append = false) {
     } finally {
         isLoadingUsers = false;
     }
+}
+
+function setCorrectTime(time) {
+    if (!time) return `Был(а) давно`;
+
+    const userYear = parseInt(time.slice(0, 4));
+    const userMonth = parseInt(time.slice(5, 7));
+    const userDay = parseInt(time.slice(8, 10));
+    const userTime = time.slice(11, 16);
+
+    const months = ['moc_Month', 'Января', 'Февраля', 'Марта', 'Апреля', 'Мая', 'Июня', 'Июля', 'Августа', 'Сентября', 'Октября', 'Ноября', 'Декабря'];
+
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDate = now.getDate();
+
+    if (userYear === todayYear && userMonth === todayMonth && userDay === todayDate) {
+        return `Был(а) в ${userTime}`;
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(todayDate - 1);
+    if (userYear === yesterday.getFullYear() &&
+        userMonth === yesterday.getMonth() + 1 &&
+        userDay === yesterday.getDate()) {
+        return `Был(а) вчера в ${userTime}`;
+    }
+
+    if (userYear === todayYear && userMonth === todayMonth) {
+        return `Был(а) ${userDay} ${months[userMonth]} в ${userTime}`;
+    }
+
+    if (userYear <= todayYear) {
+        return `Был(а) ${userDay} ${months[userMonth]} ${userYear}`;
+    }
+
+    return `Был(а) недавно`;
 }
 
 function renderUsersList(users, append = false) {
@@ -70,18 +107,19 @@ function renderUsersList(users, append = false) {
     }
 
     if (users.length === 0 && !append) {
-        userListContainer.innerHTML = '<div style="padding: 15px; color: #888;">Нет других пользователей</div>';
+        userListContainer.innerHTML = '<div style="padding: 15px; color: #888;">Пользователи отсутствуют</div>';
         return;
     }
 
     users.forEach(user => {
         const item = document.createElement('div');
         item.className = 'user-item';
+        let whatTimeUserWas = setCorrectTime(user.lastSeenAt);
         item.setAttribute('data-uuid', user.uuid);
 
         const isOnline = user.isOnline !== undefined ? user.isOnline : (user.online || false);
         const statusClass = isOnline ? 'status-online' : 'status-offline';
-        const statusText = isOnline ? 'В сети' : 'Не в сети';
+        const statusText = isOnline ? 'В сети' : whatTimeUserWas;
         const avatarSrc = user.userImage || DEFAULT_AVATAR;
 
         item.innerHTML = `
@@ -455,8 +493,13 @@ function setupEventListeners() {
     const userListContainer = document.getElementById('user-list');
     if (userListContainer) {
         userListContainer.addEventListener('scroll', () => {
-            const isAtBottom = userListContainer.scrollTop + userListContainer.clientHeight >= userListContainer.scrollHeight - 10;
-            if (isAtBottom && (currentPage + 1 < totalPages) && !isLoadingUsers) {
+            const scrollTop = Math.ceil(userListContainer.scrollTop);
+            const clientHeight = userListContainer.clientHeight;
+            const scrollHeight = userListContainer.scrollHeight;
+            const isAtBottom = (scrollTop + clientHeight) >= (scrollHeight - 30);
+            const hasNextPage = (currentPage + 1) < totalPages;
+            if (isAtBottom && hasNextPage && !isLoadingUsers) {
+                console.log(`Запрашиваем следующую страницу: ${currentPage + 1}`);
                 loadAllUsers(currentPage + 1, true);
             }
         });

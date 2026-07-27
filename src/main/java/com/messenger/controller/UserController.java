@@ -38,7 +38,6 @@ public class UserController {
         }
 
         Page<UserDto> dtosPage = usersPage.map(this::mapToDto);
-
         return ResponseEntity.ok(dtosPage);
     }
 
